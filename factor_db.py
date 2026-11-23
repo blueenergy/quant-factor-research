@@ -22,6 +22,8 @@ class FactorCollections:
     factor_results: Any
     factor_catalog: Any
     worker_status: Any
+    factor_registry: Any
+    factor_tests: Any
     # Present only so the queue-isolation regression test can prove the worker
     # never touches the research queues; the worker itself does not read them.
     research_jobs: Any
@@ -40,6 +42,8 @@ def get_factor_collections(db=None) -> FactorCollections:
         factor_results=db["factor_backtest_results"],
         factor_catalog=db["factor_catalog"],
         worker_status=db["portfolio_worker_status"],
+        factor_registry=db["factor_registry"],
+        factor_tests=db["factor_tests"],
         research_jobs=db["portfolio_research_jobs"],
         research_results=db["portfolio_research_results"],
     )
@@ -57,6 +61,11 @@ def ensure_factor_indexes(cols: FactorCollections) -> None:
     cols.factor_results.create_index([("result_id", ASCENDING)], unique=True)
     cols.factor_results.create_index([("job_id", ASCENDING)])
     cols.factor_results.create_index([("user_id", ASCENDING), ("created_at", DESCENDING)])
+    cols.factor_registry.create_index([("source", ASCENDING), ("status", ASCENDING)])
+    cols.factor_registry.create_index([("family", ASCENDING)])
+    cols.factor_tests.create_index([("factor_id", ASCENDING), ("test_type", ASCENDING)])
+    cols.factor_tests.create_index([("verdict", ASCENDING), ("as_of", DESCENDING)])
+    cols.factor_tests.create_index([("result_id", ASCENDING)])
 
 
 __all__ = [

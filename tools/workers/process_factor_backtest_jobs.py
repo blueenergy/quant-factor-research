@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import time
 import uuid
@@ -35,6 +36,8 @@ from utils.job_queue import (
 
 WORKER_TYPE = "factor_backtest"
 LOCK_LABEL = "factor backtest"
+
+log = logging.getLogger(__name__)
 
 # The diagnostics stage runs for tens of minutes inside a single call, so the
 # stale threshold has to sit well above anything a healthy job can look like.
@@ -102,10 +105,12 @@ def publish_factor_catalog(collections) -> int:
     disappears here too instead of lingering as a name nothing can compute.
     """
     from analysis.factor.alpha_factor_backtest import FACTOR_SETS, factor_set_catalog
+    from analysis.factor.factor_ledger import register_catalog_factors
 
     published = 0
     for factor_set in FACTOR_SETS:
         factors = factor_set_catalog(factor_set)
+        register_catalog_factors(collections, factor_set, factors)
         collections.factor_catalog.replace_one(
             {"factor_set": factor_set},
             {
@@ -205,6 +210,15 @@ def process_one(collections, worker_id: str, heartbeat_seconds: float = DEFAULT_
             output["result_doc"],
             upsert=True,
         )
+        # The result blob is the source; the ledger is a derived, queryable
+        # view. A ledger failure must not fail the backtest job.
+        try:
+            from analysis.factor.factor_ledger import record_result
+
+            ledger = record_result(collections, output["result_doc"])
+            log.info("factor ledger: %s tests across %s factors", ledger["tests"], ledger["factors"])
+        except Exception:
+            log.exception("factor ledger write failed for result %s", output["result_id"])
         queue.complete(job_id, result_id=output["result_id"], artifact=output["artifact"])
         queue.record_worker_status(
             worker_id,
