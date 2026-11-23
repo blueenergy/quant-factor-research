@@ -374,9 +374,9 @@ def build_financial_panel(
     end_date = dates[-1]
 
     if db is None:
-        from data_manager import DatabaseManager
+        from stock_data_access.mongo_context import get_db
 
-        db = DatabaseManager().data_db
+        db = get_db()
 
     income_rows = _load_rows(
         db[INCOME_COLLECTION], symbols, start_date, end_date, _INCOME_PROJECTION

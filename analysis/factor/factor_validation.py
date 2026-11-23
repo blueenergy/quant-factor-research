@@ -296,9 +296,9 @@ def load_validation_panel(
 ) -> pd.DataFrame:
     """Long panel with adjusted prices and every field the factor specs name."""
     if db is None:
-        from data_manager import DatabaseManager
+        from stock_data_access.mongo_context import get_db
 
-        db = DatabaseManager().data_db
+        db = get_db()
 
     start = _normalize_date(start_date)
     end = _normalize_date(end_date)

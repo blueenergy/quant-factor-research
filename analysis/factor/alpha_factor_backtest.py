@@ -403,15 +403,14 @@ def normalize_panel(panel: pd.DataFrame) -> pd.DataFrame:
 def resolve_data_db(db: Any = None) -> Any:
     """Return a handle on the ``quant_data`` pipeline DB.
 
-    Connection settings are taken from ``DatabaseManager`` rather than resolved
-    here, so this script cannot drift from however the rest of the repo is
-    configured to reach Mongo.
+    Connection settings come from ``stock_data_access.mongo_context`` so this
+    worker never imports the scoring repo's ``data_manager``.
     """
     if db is not None:
         return db
-    from data_manager import DatabaseManager
+    from stock_data_access.mongo_context import get_db
 
-    return DatabaseManager().data_db
+    return get_db()
 
 
 def shift_calendar_days(date_text: str, days: int) -> str:
