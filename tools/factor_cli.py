@@ -111,6 +111,7 @@ def factor_rows(trading, *, statuses=None, source=None, family=None,
         out.append({
             "factor_id": d["_id"], "source": d.get("source"), "family": d.get("family"),
             "status": d.get("status"), "tests": counts.get(d["_id"], 0),
+            "coverage": (d.get("coverage") or {}).get("pct"),
             "latest": lv.get("verdict"), "latest_type": lv.get("test_type"),
             "as_of": lv.get("as_of"),
         })
@@ -162,8 +163,9 @@ def _cmd_factor_list(args) -> int:
         print(json.dumps(rows, ensure_ascii=False, indent=1, default=str))
         return 0
     print(_table(
-        ["factor_id", "source", "family", "status", "tests", "latest", "as_of"],
+        ["factor_id", "source", "family", "status", "tests", "cov", "latest", "as_of"],
         [[r["factor_id"], r["source"], r["family"], r["status"], r["tests"],
+          f"{r['coverage']:.1%}" if r["coverage"] is not None else "-",
           f"{r['latest'] or '-'}({r['latest_type'] or '-'})", r["as_of"]] for r in rows],
     ))
     return 0
@@ -183,6 +185,13 @@ def _cmd_factor_show(args) -> int:
     print(f"name        : {reg.get('name')}")
     print(f"source      : {reg.get('source')}   family: {reg.get('family')}")
     print(f"status      : {reg.get('status')}")
+    cov = reg.get("coverage") or {}
+    if cov:
+        print(f"coverage    : {cov.get('pct', 0):.1%} ({cov.get('non_null')}/{cov.get('total')}, "
+              f"{cov.get('factor_version')}, as_of {cov.get('as_of')})")
+        by_year = cov.get("by_year") or {}
+        print("by year     : " + "  ".join(
+            f"{y}:{v:.1%}" for y, v in sorted(by_year.items()) if v is not None))
     print(f"formula     : {reg.get('formula')}")
     print(f"description : {reg.get('description')}")
     print(f"aliases     : {', '.join(reg.get('aliases') or []) or '-'}")

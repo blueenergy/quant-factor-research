@@ -18,6 +18,9 @@ def dbs(monkeypatch):
          "family": "panel", "status": "candidate",
          "latest_verdict": {"verdict": "promising", "test_type": "ic_nonoverlap",
                             "as_of": "2026-10-17"},
+         "coverage": {"pct": 0.947, "non_null": 100, "total": 106,
+                      "factor_version": "fm1", "as_of": "2026-11-23",
+                      "by_year": {"2025": 0.98, "2026": 0.99}},
          "used_by_models": ["m1"]},
         {"_id": "alpha158.WVMA30", "name": "WVMA30", "source": "alpha158",
          "family": "波动", "status": "rejected",
@@ -60,6 +63,7 @@ def test_factor_rows_filters_and_sorts(dbs):
     rows = factor_cli.factor_rows(trading, statuses=["candidate", "untested"])
     assert [r["factor_id"] for r in rows] == ["fm1.turnover_20d", "alpha158.alpha1"]
     assert rows[0]["tests"] == 1
+    assert rows[0]["coverage"] == 0.947
     assert rows[1]["tests"] == 0
 
 
@@ -95,6 +99,7 @@ def test_cli_factor_show_table(dbs, capsys):
     assert factor_cli.main(["factor", "show", "fm1.turnover_20d"]) == 0
     out = capsys.readouterr().out
     assert "# fm1.turnover_20d" in out
+    assert "coverage    : 94.7%" in out
     assert "ic_nonoverlap" in out
 
 
