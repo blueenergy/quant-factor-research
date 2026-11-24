@@ -34,6 +34,12 @@ Every primer carries the same four fields plus optional references:
     example     a worked numeric example
     caveats     when it is most likely to mislead
     refs        authoritative links (papers, official docs)
+
+A small number of factors also carry a ``detail`` list of
+``{"heading", "body"}`` sections: the long-form write-up that explains the
+caliber choice, the role the factor plays in this system, what the measured
+evidence actually said, and the misuse patterns. It is written for the
+factors that are actually in use, not for all 200.
 """
 
 from __future__ import annotations
@@ -581,6 +587,29 @@ FACTOR_PRIMERS: Dict[str, Dict[str, Any]] = {
         "caveats": "复权口径必须前后一致（用前复权或后复权都可以，但不能混）；"
                    "停牌期间价格不变会把动量稀释，动量和反转都可能因此失真。",
         "refs": [REF_MOMENTUM],
+        "detail": [
+            {"heading": "它想抓什么", "body":
+             "标准动量假设：过去涨得好的股票会继续涨。窗口选 20 个交易日，"
+             "对应一个月的调仓周期，也是系统 20 日 label 的天然搭档。"},
+            {"heading": "为什么是这个口径", "body":
+             "用复权收盘价比值而不是对数收益，是为了和 `volume_price` 表的复权口径"
+             "一一对应；停牌日不产生新价格，所以停牌越多的股票动量越被稀释。"},
+            {"heading": "系统里承担什么角色", "body":
+             "它是 raw5 五个特征之一，被 live 模型 `research-csi1000-clean-raw5` 使用。"
+             "它在这一族里不是最强的，但它和 `momentum_60d` 分别覆盖 1 个月和 3 个月两个"
+             "尺度，模型可以自己学两者的差（加速/减速）。"},
+            {"heading": "实测结论怎么读", "body":
+             "csi1000、145 个 20 日非重叠截面、next-open、未扣成本：**最优方向是「低」**，"
+             "h20 IC +0.0526（t 4.43），h60 +0.0503（t 4.30）——在 A 股小盘上这是"
+             "**反转**而不是动量。另一个口径（2020–2024、hs300/csi500）单因子 IC −0.0352"
+             "（t −2.10）不显著，但它所在的 5 因子组让组合 IC 近乎翻倍："
+             "**单因子不显著不等于它在组合里没有位置**。"},
+            {"heading": "常见误用", "body":
+             "① `finance.factor_definitions` 里 `direction` 写的是 `higher_is_better`，"
+             "那是教科书先验、不是实测结论；按实测方向用（越低越好），符号拍反会让 IC 减半"
+             "（`raw5_eq` 0.060 → `raw5_measured` 0.113）。"
+             "② 与 `vault.return_21d` 只差一个交易日，两个一起用等于重复计权。"},
+        ],
     },
     "fm1.momentum_60d": {
         "intuition": "过去 60 个交易日的涨幅，量的是「一个季度的趋势」。",
@@ -589,6 +618,30 @@ FACTOR_PRIMERS: Dict[str, Dict[str, Any]] = {
         "caveats": "60 日窗口里有一次分红除权就会错一个台阶，复权必须正确；"
                    "半年以上涨幅在 A 股常常已经反转（1 年期反转效应）。",
         "refs": [REF_MOMENTUM],
+        "detail": [
+            {"heading": "它想抓什么", "body":
+             "和 `momentum_20d` 同一个假设，只是窗口拉到 3 个月。窗口越长，"
+             "单日噪声占比越低，信号越稳，但对趋势拐点越迟钝。"},
+            {"heading": "为什么是这个口径", "body":
+             "60 个交易日约等于一个季度，正好跨过一份财报的披露周期；"
+             "它和 20 日并存的意义不是「两个动量」，而是让模型可以观察两者的差，"
+             "也就是「近一个月相对过去三个月是加速还是减速」。"},
+            {"heading": "系统里承担什么角色", "body":
+             "raw5 五个特征之一，被 live 模型 `research-csi1000-clean-raw5` 使用。"
+             "注意它在注册表里**没有任何单因子 test 行**：它的地位完全来自"
+             "组合层面的表现（raw5 的联合 IC），不是单因子检验挣来的。"},
+            {"heading": "实测结论怎么读", "body":
+             "csi1000、145 个 20 日非重叠截面：**最优方向同样是「低」**（反转），"
+             "h20 IC +0.0647（t 4.65）、h60 +0.0561（t 4.74），比 20 日版更强。"
+             "也就是说在 csi1000 上，**过去三个月跌得多的股票后续更好**，"
+             "这与「成长动量」的选股偏好方向相反。"},
+            {"heading": "常见误用", "body":
+             "① 把 `direction=higher_is_better` 直接当成使用方向——实测是反的。"
+             "② 60 日窗口内的除权如果没对齐，会给整个序列加一个假台阶，"
+             "而这个台阶恰好和「除权日集中度」相关，容易伪造成一个看起来显著的信号。"
+             "③ 与 `momentum_20d` 相关性高，横截面 rank 后两者常常只差几档，"
+             "同时入模时要看共线性而不是只看各自 IC。"},
+        ],
     },
     "fm1.volatility_20d": {
         "intuition": "过去 20 日日收益率标准差乘以 √252 年化，量的是「这只股票平时有多颠」。",
@@ -597,6 +650,30 @@ FACTOR_PRIMERS: Dict[str, Dict[str, Any]] = {
         "caveats": "极端日（跌停、停牌复牌）会主导整个标准差；"
                    "低波动组合长期有效，但在成长风格行情里会被明显压制。",
         "refs": [REF_ARCH],
+        "detail": [
+            {"heading": "它想抓什么", "body":
+             "低波动异象：波动率高的股票长期风险调整后收益更差。"
+             "在 A 股小盘股上这条尤其强——高波动常常等于高投机、高换手、高成本。"},
+            {"heading": "为什么是这个口径", "body":
+             "用日收益标准差而不是振幅（high−low），是因为标准差对跳空和"
+             "涨跌停的刻画更完整；乘 √252 只是把它换算成年化百分比，"
+             "**对横截面排序没有任何影响**（单调变换），所以换不年化不改变模型信号，"
+             "只改变你读数的习惯。"},
+            {"heading": "系统里承担什么角色", "body":
+             "raw5 五个特征之一，被 live 模型使用。它同时是「风险」这一层的代表："
+             "模型里其他四个特征在描述方向，而它在描述不确定性。"},
+            {"heading": "实测结论怎么读", "body":
+             "csi1000、145 个 20 日非重叠截面：低波动最优，h20 IC +0.0950（t 6.12）、"
+             "h60 +0.1188（t 8.05），是 raw5 里第二强的单因子。"
+             "更关键的一条：候选因子 `amplitude_10d` 与它相关 **0.864**，"
+             "而 amplitude 的增量检验 MDE₈₀ 只有 0.0021 —— 这是一个**强阴性**："
+             "有把握说「振幅类因子的增量 < 0.0021」，因为这块信息已经被波动率吃掉了。"},
+            {"heading": "常见误用", "body":
+             "① 把「低波动好」当成「低波动股票一定涨」——它赚的是横截面差异，"
+             "整体熊市里低波动股照样跌。② 用未复权价格算日收益：除权日会出现一个"
+             "假暴跌，直接被记成高波动。③ 停牌复牌后的第一根 K 线收益极端，"
+             "样本少时会把整段标准差带偏。"},
+        ],
     },
     "fm1.turnover_20d": {
         "intuition": "过去 20 日日换手率的均值，量的是「筹码换手的活跃度」，属于情绪/流动性因子。",
@@ -605,6 +682,33 @@ FACTOR_PRIMERS: Dict[str, Dict[str, Any]] = {
         "caveats": "高换手意味着高交易成本和更高的冲击成本，"
                    "任何依赖它的收益都必须先扣成本；T+1 下当日买进的筹码不能当日卖出。",
         "refs": [REF_ILLIQ, REF_SSE],
+        "detail": [
+            {"heading": "它想抓什么", "body":
+             "换手率衡量的是「有多少筹码在换手」。在 A 股它同时混了两件事："
+             "流动性（容易买卖）和拥挤度（太多人在交易同一只票）。"
+             "低换手溢价主要来自后者：被冷落的股票一旦有资金进入，弹性更大。"},
+            {"heading": "为什么是这个口径", "body":
+             "取日均而不是最新一天，是为了压掉单日的放量噪声（涨停日的换手可以"
+             "是平时的十倍）。数据取自 `financial_daily_basic.turnover_rate`，"
+             "不是自己用成交量除以流通股本算的——这个口径和 Tushare 一致，"
+             "跨源比对时不会差一个小数点。"},
+            {"heading": "系统里承担什么角色", "body":
+             "它是 raw5 之一（被 live 模型使用），同时以 `candidate` 状态留在注册表里"
+             "等更细的净收益检验。这是有意的：**IC 强不等于净收益强**，"
+             "高换手因子的成本侵蚀是所有因子里最大的。"},
+            {"heading": "实测结论怎么读", "body":
+             "csi1000、145 个 20 日非重叠截面：**低换手最优**，"
+             "h20 IC +0.1012（t 6.98）、h60 +0.1291（t 9.64），是 raw5 里最强的单因子。"
+             "另一口径（2020–2024、hs300/csi500）也一致：hs300 −0.0875（t −3.01）、"
+             "csi500 −0.0879（t −3.55），与现有评分的最大相关只有 0.36，"
+             "说明它提供的是评分看不见的信息。"},
+            {"heading": "常见误用", "body":
+             "① 注册表 `direction` 写 `higher_is_better`，实测是**低换手更好**，"
+             "按实测方向用。② 直接拿 IC 当收益：低换手组合换手率低，成本也低，"
+             "但反过来「高换手因子在减仓时卖出成本更高」，两端都要算。"
+             "③ 停牌股的换手率会掉到接近 0，被算成「极低换手」，"
+             "在停牌前买入的样本上会伪造成有效信号。"},
+        ],
     },
     "fm1.log_market_cap": {
         "intuition": "流通市值的自然对数，量的是「公司有多大」。",
@@ -613,6 +717,35 @@ FACTOR_PRIMERS: Dict[str, Dict[str, Any]] = {
         "caveats": "A 股小市值效应极强，很多因子不做市值中性化就只是在抓市值暴露；"
                    "中位数、正态化程度都要检查。",
         "refs": [REF_TUSHARE],
+        "detail": [
+            {"heading": "它想抓什么", "body":
+             "规模因子。取对数不是为了「好看」，而是因为市值分布严重右偏："
+             "直接拿市值做横截面排序，一只巨无霸就能把整个分布压扁；"
+             "取对数后中位数和均值回到同一量级。"},
+            {"heading": "为什么是这个口径", "body":
+             "用**流通**市值（`circ_mv`，单位万元）而不是总市值：A 股大量公司的"
+             "限售股占比很高，总市值会把「实际能交易的规模」放大好几倍。"
+             "`circ_mv <= 0` 记为 NaN，不用 0 填充——0 取对数会变成负无穷，"
+             "而且 0 本身就不该出现在真实市值里。"},
+            {"heading": "系统里承担什么角色", "body":
+             "raw5 五个特征之一。它在模型里还有第二重身份：**风格暴露的刻度尺**。"
+             "任何声称有 alpha 的因子，都要先看它和 log_market_cap 的相关性，"
+             "否则可能只是在抓小市值。"},
+            {"heading": "实测结论怎么读", "body":
+             "csi1000、145 个 20 日非重叠截面：**小市值更好**，"
+             "h20 IC +0.0402（t 3.36）、h60 +0.0462（t 3.55）。"
+             "这是 raw5 里最弱的单因子，但也是最「老」的异象，"
+             "在 A 股小盘池里几乎是所有其他因子的共同底色。"
+             "另有一处必须知道的历史缺陷：早期 panel 里这一列 **100% 是 NaN**，"
+             "原因是建 panel 的顺序错了（label 先挂载、因子后挂载），"
+             "不是数据缺失——`quant_data.financial_daily_basic.circ_mv` 一直是可用的。"},
+            {"heading": "常见误用", "body":
+             "① 用 `fillna(0)` 补缺失市值：0 标准化后约等于 −13 个标准差，"
+             "是极端杠杆点，会同时污染 scaler 和系数（这是真实发生过的 bug）。"
+             "② 把「小市值有效」直接做成「只买最小的」：小市值股的容量极低，"
+             "冲击成本会把超额吃光，而且退市新规之后这个效应的强度在变化。"
+             "③ 用总市值和流通市值混着比：两个口径能差一倍以上。"},
+        ],
     },
 
     # ---- vault 手写因子 ----
@@ -623,6 +756,33 @@ FACTOR_PRIMERS: Dict[str, Dict[str, Any]] = {
         "caveats": "252 日窗口需要一年多的历史，新股样本不足；"
                    "高换手拥挤的股票在放量之后往往先跌后稳，方向并不确定。",
         "refs": [REF_ILLIQ],
+        "detail": [
+            {"heading": "它想抓什么", "body":
+             "和 `turnover_20d` 同族，但问的是不同的问题。`turnover_20d` 是**横截面**比较"
+             "「谁比谁换手高」；这个是**时序**比较「这只票现在比它自己平时热闹多少」。"
+             "前者抓「一直很冷的股票」，后者抓「突然变热的股票」。"},
+            {"heading": "为什么是这个口径", "body":
+             "用 21 日对 252 日，是让短窗口恰好等于一个调仓月、长窗口恰好等于一年，"
+             "两个窗口的比值天然无量纲，跨股票可比，不需要再做行业或市值中性化。"
+             "这也是它相对 `turnover_20d` 的唯一优势：绝对值换手率在大小盘之间差一个量级，"
+             "而「相对自己的偏离」不受这个影响。"},
+            {"heading": "系统里承担什么角色", "body":
+             "注册表状态 `candidate`，**没有接入任何模型**。它现在的价值是作为一个"
+             "「候选的拥挤度信号」占位：如果以后要做「避开刚被爆炒的股票」"
+             "这类风控，它是现成的候选。"},
+            {"heading": "实测结论怎么读", "body":
+             "2020–2024、h20、next-open、未扣成本：hs300 IC −0.0400（t −2.85）、"
+             "csi500 −0.0500（t −2.69），与现有评分的最大相关只有 0.35，"
+             "两个池方向一致且都过 t 检验，所以给 `candidate` 而不是 `confirmed`"
+             "——还缺净收益和 OOS。"},
+            {"heading": "常见误用", "body":
+             "① 和 `turnover_20d` 一起放进模型：两者同族，横截面相关不低，"
+             "同时入模会让「换手」这一族挤占过多权重。"
+             "② 新股上市不满 252 个交易日时长期均换手不可用，"
+             "这个因子的分母会极不稳定，必须设最小样本期。"
+             "③ 把它当成「动量确认」：换手放大既可能是资金进入，也可能是"
+             "出货，方向要结合价格结构判断，不能单看换手。"},
+        ],
     },
     "vault.return_21d": {
         "intuition": "21 个交易日的简单涨幅，和 fm1.momentum_20d 是同一类东西。",
@@ -936,13 +1096,21 @@ def primer_for(factor_id: str, operator: str = None, family: str = None,
 
 
 def _render(primer: Dict[str, Any], window: int = None) -> Dict[str, Any]:
+    resolved = str(window) if window is not None else "N"
     out: Dict[str, Any] = {}
     for key, value in primer.items():
         if key == "refs":
             out[key] = list(value or [])
         elif isinstance(value, str):
             # A template with no window (should not happen) reads as "N 日".
-            out[key] = value.replace("{d}", str(window) if window is not None else "N")
+            out[key] = value.replace("{d}", resolved)
+        elif key == "detail":
+            out[key] = [
+                {item_key: item_value.replace("{d}", resolved)
+                 if isinstance(item_value, str) else item_value
+                 for item_key, item_value in section.items()}
+                for section in (value or [])
+            ]
         else:
             out[key] = value
     return out

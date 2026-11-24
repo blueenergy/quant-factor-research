@@ -83,6 +83,27 @@ def test_unknown_factor_gets_an_empty_primer():
     assert primer["refs"] == []
 
 
+DETAIL_IDS = [
+    "fm1.momentum_20d", "fm1.momentum_60d", "fm1.volatility_20d",
+    "fm1.log_market_cap", "fm1.turnover_20d", "vault.bias_turn_21d_252d",
+]
+
+
+@pytest.mark.parametrize("factor_id", DETAIL_IDS)
+def test_long_form_detail_has_five_sections(factor_id):
+    primer = primer_for(factor_id)
+    sections = primer.get("detail") or []
+    assert len(sections) == 5, factor_id
+    for section in sections:
+        assert section["heading"].strip(), factor_id
+        assert section["body"].strip(), f"{factor_id}/{section['heading']}"
+
+
+def test_only_the_six_in_use_factors_carry_long_form_detail():
+    with_detail = {key for key, primer in FACTOR_PRIMERS.items() if primer.get("detail")}
+    assert with_detail == set(DETAIL_IDS)
+
+
 def test_every_primer_is_complete_and_links_are_https():
     for key, primer in list(OPERATOR_PRIMERS.items()) + list(FACTOR_PRIMERS.items()):
         for field in FIELDS:
